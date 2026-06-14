@@ -11,6 +11,60 @@ const ACCOUNTS = {
   'tiktok-wema':    { name:'TikTok', sub:'Wema Club', icon:'♪', color:'#00c896', desc:'Visibilité · Acquisition', platform:'tiktok', type:'club' },
 };
 
+// ── FICHES PROJET (contexte concret injecté dans tous les prompts) ───
+const PROJECT_BRIEFS = {
+  'insta-wema': `
+WEMA CLUB — CE QUE C'EST VRAIMENT :
+Wema Club est un espace structuré pour les professionnels, salariés, entrepreneurs et personnes en transition qui avancent sur un projet souvent seuls. Ils cherchent à échanger, apprendre et progresser. Présents à Tours et partout en France, à l'aise en présentiel et distanciel. Ils veulent de la qualité dans les rencontres, pas du networking superficiel.
+Premier événement : en présentiel à Tours + distanciel pour les autres villes.
+Fondatrice : Chaybia Maftaha.
+
+CE QUI N'EXISTE PAS ENCORE (ne pas mentionner) :
+- Pas de "table", pas de "maison", pas de métaphore culinaire
+- Pas de "ateliers" au sens formation (c'est des échanges, pas des cours)
+- Pas de tarifs ni de formules
+
+CONTENU 80/20 :
+80% = vie du club : témoignages membres, enseignements tirés des échanges (sans noms), coulisses des événements, annonces, ressources partagées
+20% = humain : mini-portraits membres (avec accord), constats universels sur avancer seul / douter
+
+TON : accueillant, collectif, bienveillant mais concret. Pas inspirationnel vague. Pas corporate. Voix de la communauté, pas de la fondatrice.`,
+
+  'tiktok-wema': `
+WEMA CLUB — CE QUE C'EST VRAIMENT :
+Wema Club est un espace structuré pour les professionnels, salariés, entrepreneurs et personnes en transition qui avancent seuls sur un projet. Échanges de qualité, pas du networking superficiel. Présentiel Tours + distanciel France entière.
+Fondatrice : Chaybia Maftaha.
+
+CE QUI N'EXISTE PAS (ne pas inventer) :
+- Pas de métaphore culinaire / table / maison
+- Pas de formules ni tarifs
+
+CONTENU : témoignages, coulisses événements, enseignements des échanges, annonces
+TON : accessible, collectif, dynamique, concret`,
+
+  'linkedin-perso': `
+CHAYBIA MAFTAHA — PERSONAL BRANDING :
+Fondatrice de UM Mentor & Wema Club. Fédératrice de communautés.
+Bio : "Je bâtis des communautés où les bonnes personnes se rencontrent pour grandir, collaborer et avancer."
+UM Mentor : association mentoring (4 promotions). Wema Club : club privé en lancement (premier événement à Tours + distanciel).
+Actuellement en recherche d'alternance.
+2699 abonnés LinkedIn. Audience : Paris (27%), Mamoudzou (7%), Tours (3%). Fondateurs (5%), co-fondateurs (4%), PDG (2%).`,
+
+  'insta-perso': `
+CHAYBIA MAFTAHA — INSTAGRAM PERSO :
+Compte relancé de zéro en juin 2026 après une période de crises liées à l'endométriose et l'adénomyose.
+Fondatrice UM Mentor & Wema Club.
+80% : la fondatrice — ses décisions, doutes, déclics, cheminement. Racontés comme réflexion personnelle, jamais comme présentation de projet.
+20% : quotidien, moments de vie authentiques.
+JAMAIS parler des événements/ateliers/préparations → réservé aux comptes club.`,
+
+  'tiktok-perso': `
+CHAYBIA MAFTAHA — TIKTOK PERSO :
+Fondatrice UM Mentor & Wema Club. Compte perso, style oral direct.
+80% : opinions tranchées, vérités terrain, déclics. 20% : vie quotidienne.
+Pas de présentation de projets → réservé aux comptes club.`,
+};
+
 const PERSONAS = {
   'linkedin-perso': {
     style:'Storytelling structuré, réflexion profonde, paragraphes courts',
@@ -113,15 +167,15 @@ function getPersona(account) {
 function personaContext(account) {
   const acc = ACCOUNTS[account];
   const p = getPersona(account);
+  const brief = get(`project_brief_${account}`, null) || PROJECT_BRIEFS[account] || '';
   return `COMPTE : ${acc.name} ${acc.sub}
-PERSONA : ${acc.type === 'perso' ? 'Chaybia Maftaha, fondatrice UM Mentor & Wema Club. Je bâtis des communautés où les bonnes personnes se rencontrent pour grandir, collaborer et avancer.' : 'Wema Club, voix de la communauté'}
 STYLE : ${p.style || ''}
 TON : ${p.ton || ''}
 POSTURE : ${p.posture || ''}
-SUJETS : ${p.sujets || ''}
 RÈGLE ÉDITORIALE : ${p.regle || ''}
 TYPE DE HOOK : ${p.hook_type || ''}
-CTA HABITUEL : ${p.cta || ''}`;
+CTA HABITUEL : ${p.cta || ''}
+${brief ? `\nCONTEXTE PROJET (utilise UNIQUEMENT ces informations) :\n${brief}` : ''}`;
 }
 
 // ── INIT ─────────────────────────────────────────────────
@@ -809,6 +863,18 @@ function renderPersona() {
     <button class="btn btn-primary" id="savePersonaBtn">Sauvegarder</button>
     <button class="btn btn-ghost" id="resetPersonaBtn">Réinitialiser</button>
   </div>
+</div>
+
+<div class="card" style="margin-top:16px;border-left:3px solid var(--accent)">
+  <div class="card-title">📋 Fiche projet — Contexte injecté dans tous les prompts</div>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+    C'est ici que tu mets les infos concrètes sur ton compte / projet. L'IA utilise UNIQUEMENT ce qui est écrit ici — plus c'est précis, moins elle invente.
+  </div>
+  <textarea class="form-textarea" id="projectBriefField" style="min-height:180px;font-size:13px">${get(`project_brief_${currentAccount}`, null) ?? (PROJECT_BRIEFS[currentAccount] || '')}</textarea>
+  <div class="btn-group" style="margin-top:12px">
+    <button class="btn btn-primary" id="saveBriefBtn">Sauvegarder la fiche projet</button>
+    <button class="btn btn-ghost" id="resetBriefBtn">Réinitialiser par défaut</button>
+  </div>
 </div>`;
 }
 
@@ -1150,6 +1216,16 @@ ${parsed.map((idea, i) => `
     document.getElementById('resetPersonaBtn')?.addEventListener('click', () => {
       set(`persona_${currentAccount}`, PERSONAS[currentAccount]||{});
       showToast('Réinitialisé');
+      renderModule();
+    });
+    document.getElementById('saveBriefBtn')?.addEventListener('click', () => {
+      const brief = document.getElementById('projectBriefField')?.value;
+      set(`project_brief_${currentAccount}`, brief);
+      showToast('Fiche projet sauvegardée ✓');
+    });
+    document.getElementById('resetBriefBtn')?.addEventListener('click', () => {
+      localStorage.removeItem(`project_brief_${currentAccount}`);
+      showToast('Fiche réinitialisée');
       renderModule();
     });
   }

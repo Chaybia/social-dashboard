@@ -170,7 +170,7 @@ function renderModule() {
   const el = document.getElementById('content');
   const map = { analyse:renderAnalyse, idees:renderIdees, redaction:renderRedaction,
     simulation:renderSimulation, persona:renderPersona, calendrier:renderCalendrier,
-    recyclage:renderRecyclage, miroir:renderMiroir };
+    recyclage:renderRecyclage, miroir:renderMiroir, connexion:window.renderConnexion };
   el.innerHTML = (map[currentModule] || (() => ''))();
   bindModuleEvents();
 }
@@ -996,6 +996,10 @@ function bindModuleEvents() {
     document.getElementById('generateRecycBtn')?.addEventListener('click', async () => {
       await runAI('aiRecycBox', generateRecyclageWithAI, 'generateRecycBtn', '✨ Recycler maintenant');
     });
+  }
+
+  if (currentModule === 'connexion') {
+    window.bindConnexionEvents?.();
   }
 
   if (currentModule === 'miroir') {

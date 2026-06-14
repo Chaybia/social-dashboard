@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Social — Chaybia</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <span class="logo-icon">◈</span>
+        <span class="logo-text">Social OS</span>
+      </div>
+
+      <div class="sidebar-section-label">COMPTES</div>
+      <nav class="account-nav">
+        <button class="account-btn active" data-account="linkedin-perso">
+          <span class="account-icon">in</span>
+          <div class="account-info">
+            <span class="account-name">LinkedIn</span>
+            <span class="account-sub">Perso</span>
+          </div>
+        </button>
+        <button class="account-btn" data-account="insta-perso">
+          <span class="account-icon">◉</span>
+          <div class="account-info">
+            <span class="account-name">Instagram</span>
+            <span class="account-sub">Perso</span>
+          </div>
+        </button>
+        <button class="account-btn" data-account="tiktok-perso">
+          <span class="account-icon">♪</span>
+          <div class="account-info">
+            <span class="account-name">TikTok</span>
+            <span class="account-sub">Perso</span>
+          </div>
+        </button>
+        <button class="account-btn" data-account="insta-wema">
+          <span class="account-icon">◉</span>
+          <div class="account-info">
+            <span class="account-name">Instagram</span>
+            <span class="account-sub">Wema Club</span>
+          </div>
+        </button>
+        <button class="account-btn" data-account="tiktok-wema">
+          <span class="account-icon">♪</span>
+          <div class="account-info">
+            <span class="account-name">TikTok</span>
+            <span class="account-sub">Wema Club</span>
+          </div>
+        </button>
+      </nav>
+
+      <div class="sidebar-section-label">MODULES</div>
+      <nav class="module-nav">
+        <button class="module-btn active" data-module="analyse">
+          <span>📊</span> Analyse
+        </button>
+        <button class="module-btn" data-module="idees">
+          <span>💡</span> Idées
+        </button>
+        <button class="module-btn" data-module="redaction">
+          <span>✍️</span> Rédaction
+        </button>
+        <button class="module-btn" data-module="simulation">
+          <span>🚨</span> Simulation
+        </button>
+        <button class="module-btn" data-module="persona">
+          <span>🧠</span> Persona
+        </button>
+        <button class="module-btn" data-module="calendrier">
+          <span>📅</span> Calendrier
+        </button>
+        <button class="module-btn" data-module="recyclage">
+          <span>🔁</span> Recyclage
+        </button>
+        <button class="module-btn" data-module="miroir">
+          <span>🪞</span> Miroir hebdo
+        </button>
+      </nav>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <!-- HEADER -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="current-account-badge" id="currentAccountBadge">
+            <span id="currentAccountIcon">in</span>
+            <div>
+              <div id="currentAccountName">LinkedIn Perso</div>
+              <div id="currentAccountDesc" class="topbar-desc">Personal branding · Fondatrice</div>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span class="date-badge" id="dateBadge"></span>
+        </div>
+      </header>
+
+      <!-- CONTENT -->
+      <div class="content" id="content">
+        <!-- Loaded dynamically -->
+      </div>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

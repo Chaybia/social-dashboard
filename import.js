@@ -152,9 +152,9 @@ function renderImportCard(accountKey, label, platform) {
   }
   <div class="drop-zone" id="drop_${accountKey}" data-account="${accountKey}" data-platform="${platform}">
     <div class="drop-icon">📁</div>
-    <div class="drop-text">Glisse ton fichier ici<br><span style="font-size:11px;color:var(--text-faint)">${platform === 'tiktok' ? '.xlsx · .csv · .json · .zip' : '.csv'}</span></div>
+    <div class="drop-text">Glisse ton fichier ici<br><span style="font-size:11px;color:var(--text-faint)">.xlsx · .csv · .zip · .json</span></div>
     <input type="file" class="drop-input" id="file_${accountKey}"
-      accept="${platform === 'tiktok' ? '.xlsx,.csv,.json,.zip' : '.csv'}"
+      accept=".xlsx,.csv,.json,.zip,.xls"
       data-account="${accountKey}" data-platform="${platform}" />
   </div>
 </div>`;
@@ -486,26 +486,48 @@ function parseTikTokCSVRow(row) {
 }
 
 function parseLinkedInCSVRow(row) {
-  // LinkedIn Analytics CSV : post content, date, impressions, reactions, comments, reposts/shares, clicks
-  const dateRaw = row.date || row.created_date || row.published_date || row.post_date || row.created_at || '';
+  // Cherche la date dans toutes les colonnes possibles (FR + EN)
+  const dateRaw =
+    row.date || row.created_date || row.published_date || row.post_date || row.created_at ||
+    row.date_de_cr_ation || row.date_creation || row.date_publication ||
+    row.period || row.p_riode || row.p__riode ||
+    findColByKeywords(row, ['date','p_riode','period','cr_ation','creation','publication']) || '';
+
   const date = parseDate(dateRaw);
   if (!date) return null;
 
-  const text = row.post_content || row.content || row.post_url || row.description || '';
-  const format = guessLinkedInFormat(row.post_type || row.type || '');
+  const text =
+    row.post_content || row.content || row.contenu || row.contenu_du_post ||
+    row.post_url || row.url || row.description || row.title || row.titre ||
+    findColByKeywords(row, ['content','contenu','url','title','titre','description']) || '';
+
+  const format = guessLinkedInFormat(
+    row.post_type || row.type || row.type_de_post ||
+    findColByKeywords(row, ['type']) || ''
+  );
 
   return {
     text: text.substring(0, 150),
     format,
     date,
-    vues:         +normalize(row.impressions || row.views || row.impression_count || '0'),
-    likes:        +normalize(row.reactions || row.likes || row.reaction_count || '0'),
-    commentaires: +normalize(row.comments || row.comment_count || '0'),
-    partages:     +normalize(row.reposts || row.shares || row.reshares || row.repost_count || '0'),
+    vues:         +normalize(findColByKeywords(row, ['impression','vue','view','port_e','portée','reach']) || '0'),
+    likes:        +normalize(findColByKeywords(row, ['reaction','réaction','like','j_aime']) || '0'),
+    commentaires: +normalize(findColByKeywords(row, ['comment']) || '0'),
+    partages:     +normalize(findColByKeywords(row, ['repost','share','partage','redistribution']) || '0'),
     sauvegardes:  0,
-    clics:        +normalize(row.clicks || row.click_count || '0'),
+    clics:        +normalize(findColByKeywords(row, ['click','clic']) || '0'),
     source: 'linkedin_csv',
   };
+}
+
+// Cherche dans les clés d'un objet par mots-clés partiels
+function findColByKeywords(row, keywords) {
+  const keys = Object.keys(row);
+  for (const kw of keywords) {
+    const found = keys.find(k => k.toLowerCase().includes(kw.toLowerCase()));
+    if (found && row[found]) return row[found];
+  }
+  return null;
 }
 
 function guessLinkedInFormat(type) {
@@ -549,7 +571,7 @@ async function parseTikTokZip(file) {
   return posts;
 }
 
-// XLSX
+// XLSX — détecte automatiquement si c'est un AggregateAnalytics LinkedIn
 async function parseXLSX(file, platform) {
   if (!window.XLSX) {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
@@ -557,9 +579,128 @@ async function parseXLSX(file, platform) {
 
   const arrayBuffer = await readFileArrayBuffer(file);
   const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+
+  // Détecte le format LinkedIn AggregateAnalytics
+  const sheetNames = workbook.SheetNames.map(n => n.toLowerCase());
+  const isLinkedInAggregate =
+    sheetNames.some(n => n.includes('engagement') || n.includes('meilleurs') || n.includes('abonnés') || n.includes('abonnes'));
+
+  if (isLinkedInAggregate || platform === 'linkedin') {
+    return parseLinkedInAggregateXLSX(workbook);
+  }
+
+  // Fallback CSV générique
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const csvText = XLSX.utils.sheet_to_csv(sheet);
   return parseCSV(csvText, platform);
+}
+
+// Parser dédié LinkedIn AggregateAnalytics (5 feuilles)
+function parseLinkedInAggregateXLSX(workbook) {
+  const posts = [];
+  const dailyStats = {};
+
+  for (const sheetName of workbook.SheetNames) {
+    const ws = workbook.Sheets[sheetName];
+    const name = sheetName.toLowerCase();
+
+    // ─── FEUILLE ENGAGEMENT : stats quotidiennes ──────────
+    if (name.includes('engagement')) {
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      // Ligne 0 = header (Date | Impressions | Interactions)
+      for (let i = 1; i < rows.length; i++) {
+        const [dateRaw, impressions, interactions] = rows[i];
+        const date = parseDate(String(dateRaw));
+        if (!date) continue;
+        dailyStats[date] = {
+          vues: +impressions || 0,
+          likes: +interactions || 0,
+          commentaires: 0, partages: 0, sauvegardes: 0,
+        };
+      }
+    }
+
+    // ─── FEUILLE MEILLEURS POSTS ──────────────────────────
+    if (name.includes('meilleurs') || name.includes('posts') || name.includes('top')) {
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      // Structure : URL | Date | Interactions | URL | Date | Impressions
+      // Les données commencent ligne 3 (index 3) dans ce fichier LinkedIn
+      const dataStart = rows.findIndex((r, i) => i > 0 && String(r[0]).startsWith('http'));
+      if (dataStart === -1) continue;
+
+      for (let i = dataStart; i < rows.length; i++) {
+        const row = rows[i];
+        // Colonne 0-2 : triés par interactions
+        const url1     = String(row[0] || '');
+        const date1Raw = String(row[1] || '');
+        const inter1   = +row[2] || 0;
+        // Colonne 3-5 : triés par impressions
+        const url2     = String(row[3] || '');
+        const date2Raw = String(row[4] || '');
+        const impr2    = +row[5] || 0;
+
+        if (url1.startsWith('http')) {
+          const date = parseDate(date1Raw);
+          if (date) posts.push(linkedInPostFromUrl(url1, date, { likes: inter1, vues: 0 }));
+        }
+        if (url2.startsWith('http') && url2 !== url1) {
+          const date = parseDate(date2Raw);
+          if (date) posts.push(linkedInPostFromUrl(url2, date, { likes: 0, vues: impr2 }));
+        }
+      }
+    }
+  }
+
+  // Sauvegarde les stats quotidiennes
+  Object.entries(dailyStats).forEach(([date, stats]) => {
+    const existing = get(statsKey('linkedin-perso', date), {});
+    set(statsKey('linkedin-perso', date), { ...existing, ...stats });
+  });
+
+  // Déduplique les posts (même URL = même post)
+  const seen = new Map();
+  for (const p of posts) {
+    if (seen.has(p.linkedin_url)) {
+      // Fusionne les stats
+      const existing = seen.get(p.linkedin_url);
+      existing.vues  = Math.max(existing.vues, p.vues);
+      existing.likes = Math.max(existing.likes, p.likes);
+    } else {
+      seen.set(p.linkedin_url, p);
+    }
+  }
+
+  return [...seen.values()];
+}
+
+function linkedInPostFromUrl(url, date, stats) {
+  // Extrait le texte depuis le slug de l'URL LinkedIn
+  // ex: /posts/chaybia-maftaha_je-recherche-une-alternance-share-7437120[...]-kxNC
+  const match = url.match(/\/posts\/[^_]+_(.+?)(?:-share-|-ugcPost-|-activity-)/);
+  let text = '';
+  if (match) {
+    text = decodeURIComponent(match[1])
+      .replace(/-/g, ' ')
+      .replace(/%[0-9A-F]{2}/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    // Capitalise la première lettre
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+    if (text.length > 120) text = text.substring(0, 117) + '...';
+  }
+
+  return {
+    linkedin_url: url,
+    text: text || url.substring(0, 80),
+    format: 'Post texte',
+    date,
+    vues:         stats.vues || 0,
+    likes:        stats.likes || 0,
+    commentaires: 0,
+    partages:     0,
+    sauvegardes:  0,
+    source: 'linkedin_xlsx',
+  };
 }
 
 // ── UTILS PARSING ─────────────────────────────────────────

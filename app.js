@@ -70,6 +70,14 @@ const set = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 const statsKey = (acc, date) => `stats_${acc}_${date}`;
 const postsKey = acc => `posts_${acc}`;
 
+// ── CONTEXTE PARTAGÉ ENTRE MODULES ───────────────────────
+// Permet de passer le résultat d'une simulation vers la rédaction, etc.
+const sharedCtx = {
+  get: (k) => { try { return JSON.parse(sessionStorage.getItem('ctx_'+k)); } catch { return null; } },
+  set: (k, v) => sessionStorage.setItem('ctx_'+k, JSON.stringify(v)),
+  clear: (k) => sessionStorage.removeItem('ctx_'+k),
+};
+
 // ── GROQ API ─────────────────────────────────────────────
 async function callGroq(prompt, systemPrompt = '') {
   const key = get('settings', {}).groqKey;
@@ -394,6 +402,7 @@ Sois directe, courte, sans fioritures.`;
 function renderIdees() {
   const acc = ACCOUNTS[currentAccount];
   const ideas = get(`ideas_${currentAccount}`, []);
+  const byStatus = { todo: ideas.filter(i=>i.status==='todo'||!i.status), done: ideas.filter(i=>i.status==='done') };
 
   return `
 <div class="section-title">💡 Idées de contenu <span class="badge">${acc.name} ${acc.sub}</span></div>
@@ -417,35 +426,91 @@ function renderIdees() {
     </div>
   </div>
   <div class="form-group">
-    <label class="form-label">Thème ou sujet (optionnel)</label>
-    <input class="form-input" id="ideaTheme" placeholder="Ex: le moment où j'ai décidé de créer Wema, doute face à une décision..." />
+    <label class="form-label">Thème ou sujet</label>
+    <input class="form-input" id="ideaTheme" placeholder="Ex: ma semaine de crises, une décision difficile, un déclic..." />
   </div>
-  <button class="btn btn-primary" id="generateIdeaBtn">
-    <span id="ideaBtnText">✨ Générer les idées</span>
-  </button>
+  <div class="form-group">
+    <label class="form-label">Contexte / précisions (important — plus tu détailles, moins l'IA invente)</label>
+    <textarea class="form-textarea" id="ideaContexte" style="min-height:70px" placeholder="Donne les faits réels : ce qui s'est passé, ce que tu ressens, des détails concrets. L'IA utilise UNIQUEMENT ce que tu écris ici."></textarea>
+  </div>
+  <button class="btn btn-primary" id="generateIdeaBtn">✨ Générer les idées</button>
 </div>
 
-<div id="aiIdeasBox" class="ai-response-box" style="display:none"></div>
+<div id="aiIdeasBox" style="display:none;margin-bottom:24px"></div>
 
-<div class="section-title" style="margin-top:24px">Idées sauvegardées</div>
-${ideas.length === 0
-  ? `<div class="empty-state"><div class="empty-icon">💡</div><div class="empty-text">Aucune idée sauvegardée.</div></div>`
-  : ideas.slice().reverse().map((idea,i)=>`
-<div class="content-card">
+<div class="section-title">
+  Banque d'idées <span class="badge">${byStatus.todo.length} à faire</span>
+</div>
+${byStatus.todo.length === 0
+  ? `<div class="empty-state"><div class="empty-icon">💡</div><div class="empty-text">Aucune idée en attente.<br>Génère des idées et valide celles qui te plaisent.</div></div>`
+  : byStatus.todo.slice().reverse().map((idea, i) => {
+      const realIdx = ideas.lastIndexOf(idea);
+      return `
+<div class="content-card" id="ideaCard_${realIdx}">
   <div class="content-card-top">
-    <div style="display:flex;gap:8px"><span class="tag tag-objectif">${idea.objectif}</span><span class="tag tag-format">${idea.format}</span></div>
-    <button class="btn btn-ghost" style="padding:3px 10px;font-size:11px" onclick="deleteIdea(${ideas.length-1-i})">✕</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <span class="tag tag-objectif">${idea.objectif||''}</span>
+      <span class="tag tag-format">${idea.format||''}</span>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-primary btn-sm" onclick="useIdeaForRedaction(${realIdx})">✍️ Rédiger</button>
+      <button class="btn btn-ghost btn-sm" onclick="markIdeaDone(${realIdx})">✓ Fait</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteIdea(${realIdx})">✕</button>
+    </div>
   </div>
-  <div class="content-card-text">${idea.theme||'Idée générée'}</div>
-  ${idea.content ? `<div style="font-size:12px;color:var(--text-muted);margin-top:8px;white-space:pre-wrap">${idea.content.substring(0,200)}...</div>` : ''}
-</div>`).join('')}`;
+  <textarea class="form-textarea idea-edit" data-idx="${realIdx}" style="min-height:80px;margin-top:8px;font-size:13px">${idea.content||idea.theme||''}</textarea>
+  <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="saveIdeaEdit(${realIdx})">Sauvegarder les modifications</button>
+</div>`}).join('')}
+
+${byStatus.done.length > 0 ? `
+<div class="section-title" style="margin-top:16px;color:var(--text-faint)">Idées déjà utilisées</div>
+${byStatus.done.slice().reverse().map((idea,i) => {
+  const realIdx = ideas.lastIndexOf(idea);
+  return `<div class="content-card" style="opacity:0.5">
+    <div class="content-card-top">
+      <span style="font-size:12px;color:var(--text-faint)">${idea.objectif||''} · ${idea.format||''}</span>
+      <button class="btn btn-ghost btn-sm" onclick="deleteIdea(${realIdx})">✕</button>
+    </div>
+    <div class="content-card-text" style="font-size:12px">${(idea.content||idea.theme||'').substring(0,100)}</div>
+  </div>`;}).join('')}` : ''}`;
 }
+
+window.saveIdeaEdit = (idx) => {
+  const ideas = get(`ideas_${currentAccount}`, []);
+  const textarea = document.querySelector(`.idea-edit[data-idx="${idx}"]`);
+  if (!textarea || !ideas[idx]) return;
+  ideas[idx].content = textarea.value;
+  set(`ideas_${currentAccount}`, ideas);
+  showToast('Idée modifiée ✓');
+};
+
+window.markIdeaDone = (idx) => {
+  const ideas = get(`ideas_${currentAccount}`, []);
+  if (!ideas[idx]) return;
+  ideas[idx].status = 'done';
+  set(`ideas_${currentAccount}`, ideas);
+  renderModule();
+};
+
+window.useIdeaForRedaction = (idx) => {
+  const ideas = get(`ideas_${currentAccount}`, []);
+  const idea = ideas[idx];
+  if (!idea) return;
+  sharedCtx.set('fromIdea', { content: idea.content||idea.theme, objectif: idea.objectif, format: idea.format, account: currentAccount });
+  // Navigue vers Rédaction
+  document.querySelectorAll('.module-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-module="redaction"]')?.classList.add('active');
+  currentModule = 'redaction';
+  renderModule();
+  showToast('Idée chargée dans Rédaction ✓');
+};
 
 async function generateIdeasWithAI() {
   const acc = ACCOUNTS[currentAccount];
   const objectif = document.getElementById('ideaObjectif')?.value;
   const format = document.getElementById('ideaFormat')?.value;
   const theme = document.getElementById('ideaTheme')?.value;
+  const contexte = document.getElementById('ideaContexte')?.value;
 
   const prompt = `Tu es la directrice éditoriale de ${get('settings',{}).prenom||'Chaybia'}.
 
@@ -454,18 +519,33 @@ ${personaContext(currentAccount)}
 DEMANDE :
 - Objectif : ${objectif}
 - Format : ${format}
-${theme ? `- Thème/sujet de départ : ${theme}` : '- Pas de thème imposé, sois créative'}
+${theme ? `- Thème/sujet : ${theme}` : '- Pas de thème imposé'}
+${contexte ? `- Contexte / précisions : ${contexte}` : ''}
 
-Génère 3 idées de posts CONCRÈTES et DIFFÉRENTES pour ce compte.
+RÈGLE ABSOLUE — ANTI-INVENTION :
+Tu travailles UNIQUEMENT avec les informations fournies ci-dessus.
+N'invente AUCUN élément qui n'est pas mentionné explicitement : pas de partenaire, pas d'événement, pas de chiffre, pas d'anecdote que tu n'as pas dans le brief.
+Si le thème est vague, génère des idées d'angles — pas de contenu inventé.
 
-Pour chaque idée, donne :
-**Idée [n] — [Titre accrocheur]**
-- Angle : [l'approche unique de cette idée]
-- Hook : [la première phrase ou accroche exacte]
-- Pourquoi ça marche : [1 phrase]
-- Intensité émotionnelle : [x/10]
+Génère 3 idées de posts CONCRÈTES et DIFFÉRENTES.
 
-Les idées doivent être dans l'univers de la fondatrice, pas génériques. Pas de liste plate, sois créative et spécifique.`;
+Pour chaque idée, structure exactement ainsi :
+
+===IDÉE 1===
+Titre : [titre court]
+Angle : [l'approche unique, 1 phrase]
+Hook : [la toute première phrase du post, prête à utiliser]
+Format recommandé : [post texte / carrousel / vidéo / etc.]
+Intensité émotionnelle : [x/10]
+===FIN 1===
+
+===IDÉE 2===
+...
+===FIN 2===
+
+===IDÉE 3===
+...
+===FIN 3===`;
 
   return callGroq(prompt);
 }
@@ -482,8 +562,23 @@ window.deleteIdea = (i) => {
 // ══════════════════════════════════════════════════════════
 function renderRedaction() {
   const acc = ACCOUNTS[currentAccount];
+  const fromIdea = sharedCtx.get('fromIdea');
+  const fromSim  = sharedCtx.get('lastSimulation');
+
   return `
 <div class="section-title">✍️ Rédaction <span class="badge">${acc.name} ${acc.sub}</span></div>
+
+${fromIdea ? `
+<div class="context-banner">
+  <span>💡 Basé sur l'idée : <strong>${(fromIdea.content||'').substring(0,80)}...</strong></span>
+  <button class="btn-link" onclick="sharedCtx.set('fromIdea',null);renderModule()">✕ Effacer</button>
+</div>` : ''}
+
+${fromSim ? `
+<div class="context-banner context-banner-purple">
+  <span>🚨 Simulation disponible — l'IA en tiendra compte pour rédiger</span>
+  <button class="btn-link" onclick="sharedCtx.set('lastSimulation',null);renderModule()">✕ Effacer</button>
+</div>` : ''}
 
 <div class="card" style="margin-bottom:20px">
   <div class="card-title">Paramètres du contenu</div>
@@ -548,6 +643,8 @@ async function generateRedactionWithAI() {
   const emotion = document.getElementById('sliderEmotion')?.value||6;
   const story = document.getElementById('sliderStory')?.value||7;
   const dir = document.getElementById('sliderDir')?.value||5;
+  const fromIdea = sharedCtx.get('fromIdea');
+  const fromSim  = sharedCtx.get('lastSimulation');
 
   const prompt = `Tu vas rédiger un contenu pour ${get('settings',{}).prenom||'Chaybia'}.
 
@@ -562,24 +659,31 @@ CONTENU À RÉDIGER :
 - Intention : ${intention}
 - Format : ${format}
 - Sujet/Idée : ${sujet}
-${inclure ? `- À inclure : ${inclure}` : ''}
+${inclure ? `- À inclure absolument : ${inclure}` : ''}
 ${eviter ? `- À éviter : ${eviter}` : ''}
+${fromIdea ? `\nIDÉE DE DÉPART (à développer) :\n${fromIdea.content}` : ''}
+${fromSim ? `\nRÉSULTAT DE LA SIMULATION PRÉCÉDENTE (tiens-en compte pour améliorer) :\n${fromSim}` : ''}
 
-RÈGLES ABSOLUES :
+RÈGLE ABSOLUE — ANTI-INVENTION :
+Utilise UNIQUEMENT les informations fournies ci-dessus.
+N'invente AUCUN élément : pas de partenaire, pas d'événement, pas de chiffre, pas d'anecdote absente du brief.
+Si une information manque, laisse un [placeholder] pour que la personne complète elle-même.
+
+RÈGLES DE STYLE :
 - Écris comme Chaybia parle, pas comme une IA
 - Pas de hashtags dans le corps du texte
-- Pas de "Dans un monde où...", pas de généralités
+- Pas de "Dans un monde où...", pas de généralités inspirationnelles vides
 ${acc.platform === 'linkedin' ? '- Phrases courtes, retours à la ligne fréquents\n- Structure : hook fort / développement / chute ou question' : ''}
-${acc.platform === 'tiktok' ? '- Style oral, rythme, spontané — comme si tu parlais à la caméra\n- Commence fort, garde l\'énergie' : ''}
-${acc.platform === 'instagram' ? '- Caption incarnée, proche, visuellement aérée\n- Premiere ligne = hook visuel' : ''}
+${acc.platform === 'tiktok' ? '- Style oral, rythme, spontané — comme si tu parlais à la caméra' : ''}
+${acc.platform === 'instagram' ? '- Caption incarnée, proche, aérée\n- Première ligne = hook visuel' : ''}
 
 Donne :
 **VERSION PRINCIPALE :**
 [Le contenu complet, prêt à publier]
 
 ---
-**VARIANTE (angle légèrement différent) :**
-[Une alternative courte]`;
+**VARIANTE :**
+[Un angle légèrement différent, version courte]`;
 
   return callGroq(prompt);
 }
@@ -944,15 +1048,43 @@ function bindModuleEvents() {
     document.getElementById('generateIdeaBtn')?.addEventListener('click', async () => {
       const result = await runAI('aiIdeasBox', generateIdeasWithAI, 'generateIdeaBtn', '✨ Générer les idées');
       if (result) {
-        const ideas = get(`ideas_${currentAccount}`,[]);
-        ideas.push({
-          objectif: document.getElementById('ideaObjectif')?.value,
-          format: document.getElementById('ideaFormat')?.value,
-          theme: document.getElementById('ideaTheme')?.value||'Idée générée',
-          content: result,
-          date: today,
-        });
-        set(`ideas_${currentAccount}`, ideas);
+        // Parse les 3 idées structurées et les affiche en cartes éditables
+        const box = document.getElementById('aiIdeasBox');
+        const parsed = parseIdeasFromResult(result);
+        if (parsed.length > 0 && box) {
+          box.innerHTML = `
+<div class="ai-response-header">
+  <span style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.8px">3 idées générées — modifie et valide celles qui te plaisent</span>
+</div>
+${parsed.map((idea, i) => `
+<div class="idea-generated-card" id="genIdea_${i}">
+  <div class="idea-card-header">
+    <strong>${idea.titre||'Idée '+(i+1)}</strong>
+    <span class="tag tag-format">${idea.format||document.getElementById('ideaFormat')?.value||''}</span>
+  </div>
+  <textarea class="form-textarea gen-idea-text" id="genIdeaText_${i}" style="min-height:100px;margin:10px 0">${idea.full}</textarea>
+  <button class="btn btn-primary btn-sm" onclick="validateGeneratedIdea(${i})">✓ Valider et ajouter à la banque</button>
+</div>`).join('')}`;
+
+          window.validateGeneratedIdea = (i) => {
+            const text = document.getElementById(`genIdeaText_${i}`)?.value;
+            const ideas = get(`ideas_${currentAccount}`, []);
+            ideas.push({
+              objectif: document.getElementById('ideaObjectif')?.value,
+              format: document.getElementById('ideaFormat')?.value,
+              theme: document.getElementById('ideaTheme')?.value||'Idée générée',
+              content: text,
+              status: 'todo',
+              date: today,
+            });
+            set(`ideas_${currentAccount}`, ideas);
+            document.getElementById(`genIdea_${i}`)?.remove();
+            showToast('Idée ajoutée à la banque ✓');
+            // Refresh la banque
+            const bankEl = document.querySelector('.section-title + .empty-state, .section-title + .content-card');
+            if (bankEl) renderModule();
+          };
+        }
       }
     });
   }
@@ -965,7 +1097,25 @@ function bindModuleEvents() {
 
   if (currentModule === 'simulation') {
     document.getElementById('generateSimBtn')?.addEventListener('click', async () => {
-      await runAI('aiSimBox', generateSimulationWithAI, 'generateSimBtn', '🔍 Analyser maintenant');
+      const result = await runAI('aiSimBox', generateSimulationWithAI, 'generateSimBtn', '🔍 Analyser maintenant');
+      if (result) {
+        sharedCtx.set('lastSimulation', result);
+        // Ajoute le bouton "Rédiger depuis cette analyse"
+        const box = document.getElementById('aiSimBox');
+        if (box) {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-primary';
+          btn.style.marginTop = '16px';
+          btn.textContent = '✍️ Rédiger en tenant compte de cette analyse';
+          btn.onclick = () => {
+            document.querySelectorAll('.module-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('[data-module="redaction"]')?.classList.add('active');
+            currentModule = 'redaction';
+            renderModule();
+          };
+          box.appendChild(btn);
+        }
+      }
     });
   }
 
@@ -1056,6 +1206,28 @@ function markdownToHtml(text) {
     .replace(/^#{1,3} (.+)/gm,'<div class="ai-heading">$1</div>')
     .replace(/^---$/gm,'<hr style="border-color:var(--border);margin:16px 0">')
     .replace(/\n/g,'<br>');
+}
+
+// ── PARSE IDÉES STRUCTURÉES ──────────────────────────────
+function parseIdeasFromResult(text) {
+  const ideas = [];
+  const blocks = text.split(/===IDÉE \d+===/i).filter(b => b.trim());
+  for (const block of blocks) {
+    const clean = block.replace(/===FIN \d+===/i, '').trim();
+    if (!clean) continue;
+    const titreMatch = clean.match(/^Titre\s*:\s*(.+)/mi);
+    const formatMatch = clean.match(/Format recommandé\s*:\s*(.+)/mi);
+    ideas.push({
+      titre: titreMatch?.[1]?.trim() || '',
+      format: formatMatch?.[1]?.trim() || '',
+      full: clean,
+    });
+  }
+  // Fallback si le modèle n'a pas respecté la structure
+  if (ideas.length === 0) {
+    ideas.push({ titre: 'Idées générées', format: '', full: text });
+  }
+  return ideas;
 }
 
 // ── UTILS ────────────────────────────────────────────────

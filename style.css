@@ -682,6 +682,40 @@ body {
 /* ── CHART CONTAINER ── */
 .chart-container { position: relative; height: 200px; margin-bottom: 8px; }
 
+/* ── CONTEXT BANNER ── */
+.context-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0,200,150,0.08);
+  border: 1px solid rgba(0,200,150,0.3);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #00c896;
+  margin-bottom: 16px;
+}
+.context-banner-purple {
+  background: var(--accent-glow);
+  border-color: rgba(124,108,252,0.3);
+  color: var(--accent);
+}
+
+/* ── IDEA GENERATED CARDS ── */
+.idea-generated-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.idea-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
 /* ── CONNEXION MODULE ── */
 .conn-section {
   background: var(--surface);

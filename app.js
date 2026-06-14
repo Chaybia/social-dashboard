@@ -588,7 +588,7 @@ Pour chaque idée, structure exactement ainsi :
 ===IDÉE 1===
 Titre : [titre court]
 Angle : [l'approche unique, 1 phrase]
-Hook : [la toute première phrase du post, prête à utiliser]
+Hook IN MEDIAS RES : [la toute première phrase — citation, scène concrète, douleur ou fait précis. JAMAIS "Aujourd'hui je vais..." ou "Nous sommes..."]
 Format recommandé : [post texte / carrousel / vidéo / etc.]
 Intensité émotionnelle : [x/10]
 ===FIN 1===
@@ -738,13 +738,26 @@ Utilise UNIQUEMENT les informations fournies ci-dessus.
 N'invente AUCUN élément : pas de partenaire, pas d'événement, pas de chiffre, pas d'anecdote absente du brief.
 Si une information manque, laisse un [placeholder] pour que la personne complète elle-même.
 
+MÉTHODE DE RÉDACTION — IN MEDIAS RES (obligatoire) :
+Tu commences TOUJOURS au milieu de l'action ou de la réalité. Jamais par une présentation, jamais par "Nous sommes...", "Notre objectif est...", "Aujourd'hui je vais vous parler de...".
+La première ligne = une citation réelle, une scène concrète, une douleur, un moment précis, un chiffre.
+La solution / le projet / le produit arrive APRÈS le problème ou la scène — jamais avant.
+Exemples de bons débuts :
+- Citation d'un vrai membre : "J'aimerais rencontrer des personnes qui comprennent mes enjeux..."
+- Scène : "5h du matin. Pliée en deux."
+- Fait concret : "3 mois. C'est le temps qu'il m'a fallu pour..."
+- Douleur directe : "Avancer seul sur un projet, c'est épuisant."
+
 RÈGLES DE STYLE :
 - Écris comme Chaybia parle, pas comme une IA
 - Pas de hashtags dans le corps du texte
-- Pas de "Dans un monde où...", pas de généralités inspirationnelles vides
-${acc.platform === 'linkedin' ? '- Phrases courtes, retours à la ligne fréquents\n- Structure : hook fort / développement / chute ou question' : ''}
+- Pas de "Dans un monde où...", "Nous croyons que...", "Notre vision est de..."
+- Pas de généralités inspirationnelles vides
+- Phrases courtes. Retours à la ligne fréquents. Respiration.
+- La conclusion est sobre — une tagline ou une phrase de clôture, pas un appel à l'action pompeux
+${acc.platform === 'linkedin' ? '- Structure : scène/citation → accumulation → révélation → question ou invitation' : ''}
 ${acc.platform === 'tiktok' ? '- Style oral, rythme, spontané — comme si tu parlais à la caméra' : ''}
-${acc.platform === 'instagram' ? '- Caption incarnée, proche, aérée\n- Première ligne = hook visuel' : ''}
+${acc.platform === 'instagram' ? '- Caption aérée, proche. Première ligne = accroche immédiate dans la réalité' : ''}
 
 Donne :
 **VERSION PRINCIPALE :**

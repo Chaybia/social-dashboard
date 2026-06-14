@@ -562,8 +562,9 @@ window.deleteIdea = (i) => {
 // ══════════════════════════════════════════════════════════
 function renderRedaction() {
   const acc = ACCOUNTS[currentAccount];
-  const fromIdea = sharedCtx.get('fromIdea');
-  const fromSim  = sharedCtx.get('lastSimulation');
+  const fromIdea   = sharedCtx.get('fromIdea');
+  const fromSim    = sharedCtx.get('lastSimulation');
+  const fromSimSrc = sharedCtx.get('lastSimulationSource') || {};
 
   return `
 <div class="section-title">✍️ Rédaction <span class="badge">${acc.name} ${acc.sub}</span></div>
@@ -576,8 +577,8 @@ ${fromIdea ? `
 
 ${fromSim ? `
 <div class="context-banner context-banner-purple">
-  <span>🚨 Simulation disponible — l'IA en tiendra compte pour rédiger</span>
-  <button class="btn-link" onclick="sharedCtx.set('lastSimulation',null);renderModule()">✕ Effacer</button>
+  <span>🚨 Simulation chargée — l'IA va réécrire ton texte en tenant compte de l'analyse</span>
+  <button class="btn-link" onclick="sharedCtx.clear('lastSimulation');sharedCtx.clear('lastSimulationSource');renderModule()">✕ Effacer</button>
 </div>` : ''}
 
 <div class="card" style="margin-bottom:20px">
@@ -585,7 +586,7 @@ ${fromSim ? `
   <div class="form-row">
     <div class="form-group">
       <label class="form-label">Intention</label>
-      <select class="form-select" id="redIntention">
+      <select class="form-select" id="redIntention" ${fromSimSrc.intention ? `data-preselect="${fromSimSrc.intention}"` : ''}>
         <option>Branding / Qui je suis</option>
         <option>Partage d'expérience</option>
         <option>Opinion / Prise de position</option>
@@ -606,8 +607,8 @@ ${fromSim ? `
     </div>
   </div>
   <div class="form-group">
-    <label class="form-label">Ton sujet / idée de base</label>
-    <textarea class="form-textarea" id="redSujet" placeholder="Décris ton idée, l'histoire, le moment, la décision... Plus tu es précise, meilleur est le résultat."></textarea>
+    <label class="form-label">Texte à rédiger / réécrire</label>
+    <textarea class="form-textarea" id="redSujet" placeholder="Colle ton texte existant à améliorer, ou décris ton idée en détail..." style="min-height:140px">${fromSimSrc.content || (fromIdea ? fromIdea.content : '')}</textarea>
   </div>
   <div class="form-row">
     <div class="form-group">
@@ -643,10 +644,13 @@ async function generateRedactionWithAI() {
   const emotion = document.getElementById('sliderEmotion')?.value||6;
   const story = document.getElementById('sliderStory')?.value||7;
   const dir = document.getElementById('sliderDir')?.value||5;
-  const fromIdea = sharedCtx.get('fromIdea');
-  const fromSim  = sharedCtx.get('lastSimulation');
+  const fromIdea   = sharedCtx.get('fromIdea');
+  const fromSim    = sharedCtx.get('lastSimulation');
+  const fromSimSrc = sharedCtx.get('lastSimulationSource');
 
-  const prompt = `Tu vas rédiger un contenu pour ${get('settings',{}).prenom||'Chaybia'}.
+  const modeRewrite = !!(fromSim && fromSimSrc?.content);
+
+  const prompt = `Tu vas ${modeRewrite ? 'RÉÉCRIRE un contenu existant' : 'rédiger un nouveau contenu'} pour ${get('settings',{}).prenom||'Chaybia'}.
 
 ${personaContext(currentAccount)}
 
@@ -661,8 +665,19 @@ CONTENU À RÉDIGER :
 - Sujet/Idée : ${sujet}
 ${inclure ? `- À inclure absolument : ${inclure}` : ''}
 ${eviter ? `- À éviter : ${eviter}` : ''}
-${fromIdea ? `\nIDÉE DE DÉPART (à développer) :\n${fromIdea.content}` : ''}
-${fromSim ? `\nRÉSULTAT DE LA SIMULATION PRÉCÉDENTE (tiens-en compte pour améliorer) :\n${fromSim}` : ''}
+${fromIdea && !modeRewrite ? `\nIDÉE DE DÉPART (à développer) :\n${fromIdea.content}` : ''}
+${modeRewrite ? `
+TEXTE ORIGINAL À RÉÉCRIRE :
+---
+${fromSimSrc.content}
+---
+
+ANALYSE DE LA SIMULATION (points à corriger / améliorer) :
+---
+${fromSim}
+---
+
+Ta mission : réécrire le texte original EN CORRIGEANT les faiblesses identifiées et EN GARDANT les forces. Ne pars pas de zéro — améliore ce qui existe.` : fromSim ? `\nCONTEXTE SIMULATION DISPONIBLE :\n${fromSim}` : ''}
 
 RÈGLE ABSOLUE — ANTI-INVENTION :
 Utilise UNIQUEMENT les informations fournies ci-dessus.
@@ -1099,7 +1114,13 @@ ${parsed.map((idea, i) => `
     document.getElementById('generateSimBtn')?.addEventListener('click', async () => {
       const result = await runAI('aiSimBox', generateSimulationWithAI, 'generateSimBtn', '🔍 Analyser maintenant');
       if (result) {
+        // Sauvegarde aussi le contenu original + format + intention
         sharedCtx.set('lastSimulation', result);
+        sharedCtx.set('lastSimulationSource', {
+          content:   document.getElementById('simContent')?.value || '',
+          format:    document.getElementById('simFormat')?.value || '',
+          intention: document.getElementById('simIntention')?.value || '',
+        });
         // Ajoute le bouton "Rédiger depuis cette analyse"
         const box = document.getElementById('aiSimBox');
         if (box) {
